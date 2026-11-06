@@ -1,0 +1,1 @@
+{ values: [ { current: 10, meta: { p: @.$prev } }, { current: 11 } ] }

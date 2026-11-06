@@ -1,0 +1,1 @@
+{"items":[{"id":1,"other":ref("/items/1/id")},{"id":2,"me":ref("/items/0")}],"last":ref("/items/1")}

@@ -1,0 +1,1 @@
+{"id":9,"users":[{"id":1,"name":"a","active":true,"role":"member","score":f32(0x40000000),"tags":["x"],"email":"e@x","nick":"nn"},{"id":2,"name":"b","active":false,"role":"member","score":f32(0x40400000),"tags":[],"nick":"anon"}],"attendees":[],"blob":bytes(""),"grid":[]}

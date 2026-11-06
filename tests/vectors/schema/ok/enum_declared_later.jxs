@@ -1,0 +1,2 @@
+schema A { x: E = "b" }
+enum E { a  b }

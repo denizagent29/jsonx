@@ -1,0 +1,1 @@
+{"items":[{"id":0,"next":ref("/items/1")},{"id":1,"next":ref("/items/2")},{"id":2,"next":ref("/items/3")},{"id":3,"next":ref("/items/4")},{"id":4,"next":ref("/items/5")},{"id":5}],"last":ref("/items/5"),"ids":[ref("/items/0/id"),ref("/items/1/id"),ref("/items/2/id"),ref("/items/3/id"),ref("/items/4/id"),ref("/items/5/id")]}

@@ -1,0 +1,3 @@
+lesson_v2_id=f30a6515714e7ea1
+lesson_v1_id=f30a6515714e7ea1
+lesson_v2_fingerprint=79cd4cfe1767704b

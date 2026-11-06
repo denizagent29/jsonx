@@ -1,0 +1,1 @@
+{ items: [{id:0,next:@$next},{id:1,next:@$next},{id:2,next:@$next},{id:3,next:@$next},{id:4,next:@$next}, {id:5}], last:@items.5, ids:[@items.0.id,@items.1.id,@items.2.id,@items.3.id,@items.4.id,@items.5.id] }

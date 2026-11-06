@@ -1,0 +1,1 @@
+{ users: [ { id: 23 } ], <$previous=$prev> previous_user_id: @$previous.id }

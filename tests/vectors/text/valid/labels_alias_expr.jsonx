@@ -1,0 +1,1 @@
+{ users: [ { id: 1 }, { id: 2 } ], <First=@users.0> pick: @First.id, <$second=users.1> also: @$second.id }

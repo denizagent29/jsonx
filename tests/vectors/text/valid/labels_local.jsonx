@@ -1,0 +1,1 @@
+{ <user> id: 23, name: "Deniz", related_id: @user.id, nested: { again: @user.name } }

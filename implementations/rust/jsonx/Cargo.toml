@@ -1,0 +1,9 @@
+[package]
+name = "jsonx"
+version.workspace = true
+edition.workspace = true
+description = "JSONX text and BJSONX binary format: parser, resolver, schema-driven codec, zero-copy views"
+license.workspace = true
+
+[dependencies]
+

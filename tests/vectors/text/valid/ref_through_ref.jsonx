@@ -1,0 +1,1 @@
+{ users: [ { id: 1, tag: "x" } ], att: { user: @users.0 }, tag: @att.user.tag }

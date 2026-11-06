@@ -1,0 +1,1 @@
+{ values: [ { current: 10, meta: { prev: @$next.current } }, { current: 11 } ] }

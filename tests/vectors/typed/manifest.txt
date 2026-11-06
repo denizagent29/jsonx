@@ -1,0 +1,4 @@
+lesson
+lesson_minimal
+lesson_union_label
+lesson_many_users

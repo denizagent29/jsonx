@@ -1,0 +1,7 @@
+# Order matters: later rules win. Default first, exceptions after.
+* text=auto eol=lf
+*.sh text eol=lf
+# Golden vectors contain binary data and deliberate CR/CRLF test inputs: git must never rewrite them.
+tests/vectors/** -text -eol
+*.bjsonx binary
+*.jxsb binary

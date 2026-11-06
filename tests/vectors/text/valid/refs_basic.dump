@@ -1,0 +1,1 @@
+{"users":[{"id":23,"name":"Deniz"},{"id":35,"name":"Adil"}],"user_related_to":ref("/users/1"),"user_id":ref("/users/0/id")}

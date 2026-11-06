@@ -1,0 +1,17 @@
+import fs from "node:fs"; import path from "node:path"; import { fileURLToPath } from "node:url";
+import * as J from "../implementations/js/src/jsonx.mjs";
+const D = path.join(path.dirname(fileURLToPath(import.meta.url)), "data");
+const t = (f, reps = 5, min = 0.4) => { f(); const s = []; for (let r = 0; r < reps; r++) { let n = 1, e; for (;;) { const a = process.hrtime.bigint(); for (let i = 0; i < n; i++) f(); e = Number(process.hrtime.bigint() - a) / 1e9; if (e >= min / reps || n >= 1 << 14) break; n *= 2; } s.push(e / n); } s.sort((a, b) => a - b); return s[reps >> 1]; };
+const ms = (x) => (x * 1e3).toFixed(2);
+const jtext = fs.readFileSync(path.join(D, "users.json"), "utf8"), xtext = fs.readFileSync(path.join(D, "users.jsonx"), "utf8");
+const sc = J.loadSchema(new Uint8Array(fs.readFileSync(path.join(D, "users.jxsb"))));
+const obj = JSON.parse(jtext), doc = J.parse(xtext), bd = J.encode(doc), bt = J.encode(doc, sc);
+console.log("| operation (Node " + process.version + ") | ms | size (bytes) |\n|---|---:|---:|");
+const row = (n, f, s = "") => console.log(`| ${n} | ${ms(t(f))} | ${s} |`);
+row("JSON.stringify", () => JSON.stringify(obj), Buffer.byteLength(jtext)); row("JSON.parse", () => JSON.parse(jtext));
+row("JSONX parse (text, with resolver)", () => J.parse(xtext), Buffer.byteLength(xtext));
+row("BJSONX dynamic encode", () => J.encode(doc), bd.length); row("BJSONX dynamic decode (to Document)", () => J.decode(bd));
+row("BJSONX typed encode", () => J.encode(doc, sc), bt.length); row("BJSONX typed decode (to Document)", () => J.decode(bt, sc));
+row("JSON.parse + read users[5000].name", () => JSON.parse(jtext).users[5000].name);
+row("BJSONX typed view: users[5000].name (zero-copy)", () => J.view(bt, sc).get("users").get(5000).get("name"));
+row("BJSONX dynamic view: users[5000].name (zero-copy)", () => J.view(bd).get("users").get(5000).get("name"));

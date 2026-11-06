@@ -1,0 +1,2 @@
+version 2
+schema A { a: optional<u8> @since(2) }

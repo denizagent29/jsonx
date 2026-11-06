@@ -1,0 +1,1 @@
+{"id":23,"name":"Deniz","related_id":ref("/id"),"nested":{"again":ref("/name")}}

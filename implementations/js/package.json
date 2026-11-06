@@ -1,0 +1,13 @@
+{
+  "name": "jsonx",
+  "version": "0.1.0",
+  "description": "JSONX text and BJSONX binary format: parser, resolver, schema-driven codec, zero-copy views",
+  "type": "module",
+  "main": "src/jsonx.mjs",
+  "types": "src/jsonx.d.mts",
+  "exports": { ".": { "types": "./src/jsonx.d.mts", "default": "./src/jsonx.mjs" } },
+  "files": ["src"],
+  "license": "MIT",
+  "engines": { "node": ">=18" },
+  "scripts": { "test": "node ../../tests/test_js.mjs" }
+}

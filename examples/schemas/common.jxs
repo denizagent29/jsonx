@@ -1,0 +1,6 @@
+// Shared types, imported by lesson.jxs
+enum Role : u8 {
+    guest = 0
+    member = 1
+    admin = 2
+}

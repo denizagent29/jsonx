@@ -1,0 +1,2 @@
+schema B { v: u8 }
+schema A { x: ref<ref<B>> }

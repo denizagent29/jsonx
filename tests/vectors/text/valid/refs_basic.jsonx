@@ -1,0 +1,2 @@
+{ users: [ { id: 23, name: "Deniz" }, { id: 35, name: "Adil" } ],
+  user_related_to: @users.1, user_id: @users.0.id }

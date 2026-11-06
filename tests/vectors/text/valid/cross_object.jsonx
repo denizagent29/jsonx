@@ -1,0 +1,1 @@
+{ users: [ { id: 23, gender: "male" } ], lessons: { attendees: [ { user: @users.0 } ] } }

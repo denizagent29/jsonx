@@ -1,0 +1,1 @@
+{ items: [ { id: 1, other: @.!.1.id }, { id: 2, me: @.!.0 } ], last: @items.1 }

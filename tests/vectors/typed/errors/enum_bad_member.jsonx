@@ -1,0 +1,1 @@
+{ id: 1, users: [ { id: 1, name: "n", active: true, score: 1, tags: [], role: "root" } ], attendees: [  ], blob: "", grid: [] }

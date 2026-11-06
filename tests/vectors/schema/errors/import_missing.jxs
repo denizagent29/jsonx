@@ -1,0 +1,2 @@
+import "nope.jxs"
+schema A { x: u8 }

@@ -1,0 +1,1 @@
+{ <Users> users: [ { id: 23, name: "Deniz" } ], selected_user: @Users.users.0, deep: { v: @Users.users.0.name } }

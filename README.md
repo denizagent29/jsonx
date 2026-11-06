@@ -1,0 +1,126 @@
+# JSONX — text + binary serialization with native references, labels and schemas
+
+JSONX is a JSON-like text format (comments, unquoted keys, **references as real links**, labels, scoped variables,
+`$prev`/`$next`) with a schema language and a compact, **zero-copy, random-access binary form (BJSONX)**.
+This repository holds the specification, a schema compiler, and four interoperable implementations
+(Python, Rust, Go, JavaScript/TypeScript) that pass one shared set of golden test vectors and produce **byte-identical** blobs.
+
+```jsonx
+{
+    // comments, unquoted keys, trailing commas
+    users: [ { id: 23, name: "Deniz" }, { id: 35, name: "Adil" } ],
+    related: @users.1,            // a link to the object, not a copy
+    uid:     @users.0.id,         // a link to a field
+    <Admin> admin: { <me> id: 1, again: @me.id },
+    lessons: { attendees: [ { user: @users.0 } ] }   // lessons.attendees[0].user.id navigates through the link
+}
+```
+MIME types: `application/jsonx`, `application/bjsonx` (see `specification/http.md`).
+
+## Status (v0.1.0) — what is real
+| | Python | JS/TS | Go | Rust |
+|---|:-:|:-:|:-:|:-:|
+| text parser, resolver (labels, pointers, `$prev/$next`), errors with line/col | ✅ | ✅ | ✅ | ✅ |
+| schema language compiler | ✅ `jsonxc` | loads `.jxsb` | loads `.jxsb` | ✅ `jsonx::compile_str/_file` + native `jsonxc` binary |
+| BJSONX encode (dynamic + typed), validating decode | ✅ | ✅ | ✅ | ✅ |
+| zero-copy views | ✅ | ✅ | ✅ | ✅ (borrowing, `Val<'b,'a>`) |
+| typed API from a schema | – | `.d.mts` + `gen ts` types | `gen go` structs | ✅ `#[derive(Bjsonx)]` (schema-checked codec + typed views) |
+| shared vectors + malformed-input corpus + mutation fuzz | ✅ | ✅ | ✅ | ✅ |
+Cross-language: `tests/interop.sh` (all four produce identical bytes and read each other's blobs). Run everything: `tests/run_all.sh`.
+The Rust `jsonxc` is byte-for-byte equivalent to the Python one (`tests/cli_parity.sh`: 124 comparisons of compiled schemas, blobs, dumps, generated code, error codes).
+Read **Known limitations** in `specification/architecture.md` before adopting; pure-Python speed is poor and typed encoding in the derive builds an intermediate document
+(see `benchmarks/RESULTS.md`, which also lists where JSONX loses and where it wins).
+
+## Quick start
+```bash
+# 1. compile a schema, encode, inspect, decode (Python >= 3.9, no dependencies)
+J=compiler/jsonxc/jsonxc
+$J compile examples/schemas/lesson.jxs -o lesson.jxsb
+$J encode examples/text/lesson.jsonx -s examples/schemas/lesson.jxs --crc -o lesson.bjsonx
+$J inspect lesson.bjsonx -s lesson.jxsb --hex
+$J decode  lesson.bjsonx -s lesson.jxsb --format json        # references appear as {"$ref": "/users/1"}
+$J validate examples/text/lesson.jsonx -s examples/schemas/lesson.jxs
+$J compat old.jxs new.jxs                                     # schema-evolution check
+$J gen examples/schemas/lesson.jxs --lang ts|go|rust|python   # types + embedded schema
+```
+Exit codes: 0 ok · 1 usage/IO · 2 invalid text/schema/data · 3 malformed binary.
+
+**Python** (`pip install -e implementations/python` or add it to `PYTHONPATH`)
+```python
+import jsonx
+doc = jsonx.parse(open("examples/text/lesson.jsonx").read())      # raises JsonxError(code, line, col, ...)
+py = doc.to_python(); assert py["attendees"][0]["user"] is py["users"][1]    # aliasing preserved
+schema = jsonx.compile_file("examples/schemas/lesson.jxs")        # or jsonx.load_schema(bytes)  (.jxsb)
+blob = jsonx.encode(doc, schema, checksum=True)                   # schema-less: jsonx.encode(doc)
+v = jsonx.view(blob, schema)                                      # zero-copy
+print(v["attendees"][0]["user"]["name"], v["shape"].name)         # follows the reference
+owned = jsonx.decode(blob, schema)                                # fully validated copy
+```
+**JavaScript / TypeScript** (Node ≥ 18 and browsers, ESM, types in `src/jsonx.d.mts`)
+```js
+import { parse, encode, decode, view, loadSchema } from "./implementations/js/src/jsonx.mjs";
+const sc = loadSchema(new Uint8Array(fs.readFileSync("lesson.jxsb")));
+const blob = encode(parse(text), sc);               // Uint8Array
+view(blob, sc).get("users").get(0).get("name");     // zero-copy over the ArrayBuffer
+```
+**Go** (`implementations/go`, module `github.com/jsonx/jsonx/implementations/go`)
+```go
+doc, err := jsonx.Parse(text)                       // *jsonx.Error carries Code/Line/Col
+sc, _ := jsonx.LoadSchema(jxsb)
+blob, _ := jsonx.Encode(doc, sc, jsonx.EncodeOptions{Checksum: true})
+root, _ := jsonx.View(blob, sc, jsonx.ReadOptions{}) // slices alias blob
+users, _ := root.(*jsonx.StructView).Get("users")
+```
+**Rust** (workspace in `implementations/rust`: `jsonx` runtime + schema compiler, `jsonx-derive` macro, `jsonxc` CLI; no external dependencies except `syn/quote` for the macro)
+```rust
+let sc = jsonx::Schema::from_bytes(&std::fs::read("lesson.jxsb")?)?;
+let doc = jsonx::parse(&text)?;
+let blob = jsonx::encode(&doc, Some(&sc), &Default::default())?;
+let b = jsonx::Blob::open(&blob, Some(&sc), &Default::default())?;     // borrows `blob`; nothing is copied
+if let jsonx::Val::Struct(root) = b.root()? { let name = root.get("users")?; /* Val::Array -> Val::Struct -> Val::Str(&str) */ }
+```
+
+### Rust: `#[derive(Bjsonx)]` (typed, schema-checked, zero-copy views)
+```rust
+use jsonx_derive::Bjsonx;                       // Cargo.toml: jsonx = "0.1", jsonx-derive = "0.1"
+
+#[derive(Bjsonx, Debug, PartialEq)]
+#[bjsonx(schema = "schemas/shop.jxs")]          // compiled at build time (rebuilds when the .jxs or its imports change); .jxsb also accepted
+struct Customer { id: u64, name: String, vip: bool, email: Option<String> }
+// ...derive the other types of the schema the same way (enums = unit variants, unions = one-field tuple variants)
+
+let blob: Vec<u8> = receipt.to_blob()?;                       // or to_blob_with(Some(1), true): older layout version + CRC-32
+let back = Receipt::from_blob(&blob)?;                        // owned value (newer fields missing in old blobs take schema defaults)
+let open = Receipt::open(&blob)?;                             // validates the header, borrows `blob`
+let view = Receipt::view(&open)?;                             // typed zero-copy view
+let nick: &str = view.nick()?;                                // &str points into `blob`, nothing is copied
+let id: u64 = view.id()?;
+```
+The macro checks the Rust type against the schema (missing/extra fields, wrong types, `Option` vs required) and reports errors on the offending field. `ref<T>` fields decode
+(as a copy of the target) and are navigable in views, but a struct containing refs cannot be *encoded* from plain values (`E_REF_TARGET`); `any` fields are rejected at compile time.
+Full working example: `implementations/rust/jsonx-derive/tests/derive.rs` with `examples/schemas/shop.jxs`.
+
+## Continuous integration
+`.github/workflows/`: **ci.yml** (vector reproducibility; Python 3.9-3.13 × Linux/Windows/macOS; Node 18/20/22 + TypeScript check; Go 1.22/1.23/stable with `-race`; Rust 1.75 (MSRV) and stable × 3 OSes; then
+cross-language interop and Rust↔Python CLI parity), **bench.yml** (manual/weekly; all benchmarks, results in the job summary and as an artifact), **release.yml** (on `vX.Y.Z` tags: full test-suite, `jsonxc` binaries for 5 platforms,
+Python sdist/wheel, npm tarball, source archive, GitHub release). Workflows are linted with `actionlint` but have not been executed on GitHub yet. Publishing to crates.io / PyPI / npm is not automated (needs registry credentials).
+
+## Layout
+```
+specification/   text-format, references, schema-language, binary-format, errors, compatibility, http, architecture(+limitations)
+compiler/jsonxc  Python CLI entry point (code in implementations/python/jsonx/cli.py); the Rust CLI is implementations/rust/jsonxc
+implementations/ python  js  go  rust (workspace: jsonx, jsonx-derive, jsonxc)
+.github/         workflows (ci, bench, release), dependabot
+tests/           generate_vectors.py (golden vectors from the reference impl), vectors/, test_*.py|mjs, interop.sh, cli_parity.sh, run_all.sh
+examples/        text/  schemas/  http/ (server + client)
+benchmarks/      gen_data.py bench.py bench.mjs (+ Go/Rust benches), RESULTS.md (measured)
+```
+The specification is the source of truth; the Python implementation is the reference used to *generate* golden vectors, and
+every other implementation must reproduce them exactly. Changing semantics means changing the spec, the generator inputs and all four implementations.
+
+## Reproducibility
+No network access is needed at build/test time (Rust crate and Go module have no dependencies; JS has none). Vector generation is deterministic
+(`tests/run_all.sh` verifies this). Benchmarks need `pip install msgpack cbor2 pymongo fastavro grpcio-tools` for the comparators.
+
+## License
+MIT (see LICENSE).

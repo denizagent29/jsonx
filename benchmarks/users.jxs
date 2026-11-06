@@ -1,0 +1,7 @@
+namespace bench
+version 1
+schema User { id: u64  name: string  active: bool  score: f64  tags: array<string> }
+schema Users { users: array<User> }
+schema Attendee { user: ref<User>  seat: u32 }
+schema Class { users: array<User>  attendees: array<Attendee> }
+root Users

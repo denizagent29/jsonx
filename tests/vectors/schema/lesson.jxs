@@ -1,0 +1,39 @@
+// JSONX schema example: users, lessons, references, unions, evolution.
+namespace acme.school
+version 2
+import "common.jxs"
+
+schema User {
+    id: u64
+    name: string @len(1, 64)
+    active: bool
+    age: optional<u8> @range(0, 150)
+    role: Role = "member"
+    score: f32
+    tags: array<string>
+    email: optional<string> @since(2) @doc("contact address")
+    nick: string = "anon" @since(2)
+}
+
+union Shape {
+    circle = 1: Circle
+    label = 2: string
+}
+schema Circle { radius: f64 }
+
+schema Attendee {
+    user: ref<User>
+    uid: ref<u64>
+    seat: nullable<u16>
+    note: any
+}
+
+schema Lesson {
+    id: u64
+    users: array<User>
+    attendees: array<Attendee>
+    shape: optional<Shape>
+    blob: bytes
+    grid: array<array<i16>>
+}
+root Lesson

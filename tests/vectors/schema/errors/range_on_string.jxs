@@ -1,0 +1,1 @@
+schema A { x: string @range(0, 1) }

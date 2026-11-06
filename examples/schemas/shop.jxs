@@ -1,0 +1,39 @@
+// Schema used by the Rust derive-macro examples and tests.
+namespace acme.shop
+version 2
+
+enum Status : u8 { draft = 0  paid = 1  shipped = 2 }
+union Payment { card = 1: Card  iban = 2: string  cash = 3: u32 }
+
+schema Card { last4: string @len(4, 4)  brand: string }
+schema Item { sku: string  qty: u32  price: f64  tags: array<string>  weight: optional<f32> }
+schema Customer {
+    id: u64
+    name: string @len(1, 64)
+    vip: bool = false
+    email: optional<string> @since(2)
+}
+
+// No references: can be encoded from plain Rust values.
+schema Receipt {
+    id: u64
+    customers: array<Customer>
+    items: array<Item>
+    status: Status
+    payment: optional<Payment>
+    note: nullable<string>
+    raw: bytes
+    grid: array<array<i16>>
+    nick: string = "n" @since(2)
+}
+
+// Has a reference: readable through views / from_blob; build it from JSONX text.
+schema Order {
+    id: u64
+    customers: array<Customer>
+    buyer: ref<Customer>
+    price: f64
+    price_ref: ref<f64>
+    status: Status
+}
+root Receipt

@@ -1,0 +1,18 @@
+[package]
+name = "jsonx-derive"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "#[derive(Bjsonx)]: typed, schema-checked BJSONX codecs and zero-copy views for Rust structs"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+jsonx = { path = "../jsonx", version = "0.1.0" }
+syn = { version = "2", features = ["full"] }
+quote = "1"
+proc-macro2 = "1"
+
+[dev-dependencies]
+jsonx = { path = "../jsonx" }

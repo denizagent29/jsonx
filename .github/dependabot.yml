@@ -1,0 +1,6 @@
+version: 2
+updates:
+  - { package-ecosystem: github-actions, directory: "/", schedule: { interval: monthly } }
+  - { package-ecosystem: cargo, directory: "/implementations/rust", schedule: { interval: monthly } }
+  - { package-ecosystem: gomod, directory: "/implementations/go", schedule: { interval: monthly } }
+  - { package-ecosystem: pip, directory: "/implementations/python", schedule: { interval: monthly } }

@@ -1,0 +1,2 @@
+schema A { x: u8 }
+root B

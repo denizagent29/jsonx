@@ -1,0 +1,1 @@
+schema A { x: optional<u8> = 1 }

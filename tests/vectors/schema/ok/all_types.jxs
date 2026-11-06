@@ -1,0 +1,14 @@
+namespace t.all
+version 3
+enum E : u16 { a = 1  b  c = 300 }
+enum Auto { x  y }
+union U { s = 1: string  n = 2: Inner  arr = 3: array<u8> }
+schema Inner { v: i32  f: f32  g: f64  b: bytes  any_: any }
+schema Rec {
+    id: u64 @doc("the id")  name: string = "x\"q" @len(0, 10)
+    opt: optional<u8> @range(0, _)  nul: nullable<E> = null  e: E = "b"
+    list: array<array<i16>>  inner: Inner  inner_ref: ref<Inner>  u: U
+    flag: bool = true  big: u64 = 18446744073709551615  neg: i64 = -5  fl: f64 = 2.5  fi: f32 = 3
+    empty: array<string> = []  late: string = "z" @since(2)  late2: optional<u32> @since(3) @deprecated
+}
+root Rec

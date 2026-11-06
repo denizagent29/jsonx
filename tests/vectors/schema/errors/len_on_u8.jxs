@@ -1,0 +1,1 @@
+schema A { x: u8 @len(0, 1) }

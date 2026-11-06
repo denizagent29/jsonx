@@ -1,0 +1,15 @@
+{
+    // Typed example for lesson.jxs
+    id: 7,
+    users: [
+        { id: 23, name: "Deniz", active: true, age: 30, role: "admin", score: 1.5, tags: ["a", "b"], email: "d@example.org" },
+        { id: 35, name: "Adil",  active: false, score: -0.25, tags: [] }
+    ],
+    attendees: [
+        { user: @users.1, uid: @users.0.id, seat: null, note: { any: [1, 2.5, "x"], back: @!any } },
+        { user: @users.0, uid: @users.1.id, seat: 12, note: @attendees.0.note }
+    ],
+    shape: { circle: { radius: 2.5 } },
+    blob: "aGVsbG8=",
+    grid: [[1, 2], [], [-3]]
+}
