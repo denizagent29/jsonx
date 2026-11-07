@@ -303,4 +303,18 @@ for name, text in SERR.items():
         jsonx.compile_schema(text, name + ".jxs", lambda p, f: (open(os.path.join(V, "schema", "ok", p)).read(), p)); print("UNEXPECTED SUCCESS", name); sys.exit(1)
     except JsonxError as e:
         w(f"schema/errors/{name}.err", f"{e.code} {e.line}:{e.col}\n"); print(f"  schema {name:24} {e.code} {e.line}:{e.col}")
+
+# ---- shop schema (typed structs in Go/Rust): golden blobs at version 2 and version 1 layouts
+os.makedirs(os.path.join(V, "shop"), exist_ok=True)
+shop = jsonx.compile_file(os.path.join(EX, "schemas", "shop.jxs"))
+w("shop/shop.jxs", open(os.path.join(EX, "schemas", "shop.jxs")).read()); w("shop/shop.jxsb", shop.to_bytes())
+RECEIPT = """{ id: 7,
+  customers: [ { id: 1, name: "Deniz", vip: true, email: "d@example.org" }, { id: 2, name: "Adil", vip: false } ],
+  items: [ { sku: "A-1", qty: 3, price: 9.5, tags: ["x", "y"], weight: 1.25 }, { sku: "B", qty: 1, price: 0.1, tags: [] } ],
+  status: "paid", payment: { card: { last4: "4242", brand: "visa" } }, note: null, raw: "AAH/", grid: [[1, -2], []], nick: "dz" }"""
+RECEIPT_V1 = """{ id: 7, customers: [ { id: 1, name: "Deniz", vip: true } ], items: [], status: "draft", note: "n", raw: "", grid: [] }"""
+w("shop/receipt.jsonx", RECEIPT); w("shop/receipt.bjsonx", jsonx.encode(jsonx.parse(RECEIPT), shop, root="Receipt"))
+w("shop/receipt_v1.jsonx", RECEIPT_V1); w("shop/receipt_v1.bjsonx", jsonx.encode(jsonx.parse(RECEIPT_V1), shop, root="Receipt", version=1))
+w("shop/receipt.dump", jsonx.decode(jsonx.encode(jsonx.parse(RECEIPT), shop, root="Receipt"), shop).dump())
+w("shop/receipt_v1_as_v2.dump", jsonx.decode(jsonx.encode(jsonx.parse(RECEIPT_V1), shop, root="Receipt", version=1), shop).dump())
 print("vectors:", sum(len(f) for _, _, f in os.walk(V)), "files")

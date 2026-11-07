@@ -25,7 +25,7 @@
   These are the only *specialised* paths; everything else interprets the compiled schema at run time.
 
 ## Known limitations (v0.1)
-* Schema *text* compilers exist in Python and Rust only; Go and JS load the compiled `.jxsb`. Go/JS have no derive-style typed mapping: `jsonxc gen go|ts` emits type definitions + the embedded schema, decoding yields views or a generic document.
+* Schema *text* compilers exist in Python and Rust only; Go and JS load the compiled `.jxsb`. Go has a reflection-based typed mapping (`Marshal`/`Unmarshal` on `jsonxc gen go` structs; interpreted, not generated; ref fields read-only; `any` fields unmarshal as views that alias the blob); JS has none: `jsonxc gen ts` emits interfaces + the embedded schema, decoding yields views or `Document.toJS()`.
 * The derive macro: no `any` fields; `ref<T>` fields decode (copy of the target) but cannot be encoded from a Rust value tree (`E_REF_TARGET`); Rust types must be named like the schema types; every derived type embeds its own copy of the schema bytes;
   unknown enum values from newer writers are an error in owned decode (views of raw documents keep the integer).
 * Generated *specialised* codecs for Go/JS/Python, and the "generated vs interpreted" benchmark for them, do not exist.

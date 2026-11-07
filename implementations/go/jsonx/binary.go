@@ -860,6 +860,38 @@ func (v *StructView) Keys() []string {
 // Get reads a field (nil for an absent optional/null value).
 func (v *StructView) Get(name string) (val interface{}, err error) {
 	defer catch(&err)
+	return v.get(name), nil
+}
+
+type emptyArray struct{}
+
+func defaultValue(f *Field) interface{} {
+	d := f.Default
+	if d == nil {
+		return nil
+	}
+	switch d.Kind {
+	case "bool":
+		return d.B
+	case "int":
+		if d.Int.IsInt64() {
+			return d.Int.Int64()
+		}
+		return d.Int.Uint64()
+	case "float":
+		if f.Type.Kind == "f32" {
+			return float32(d.F)
+		}
+		return d.F
+	case "string":
+		return d.S
+	case "array":
+		return emptyArray{}
+	}
+	return nil
+}
+
+func (v *StructView) get(name string) interface{} {
 	r := v.r
 	fl := r.fields(v.idx).by[name]
 	if fl == nil {
@@ -867,15 +899,12 @@ func (v *StructView) Get(name string) (val interface{}, err error) {
 		if f == nil {
 			fail("E_UNKNOWN_FIELD", "no field "+name)
 		}
-		if f.Default != nil {
-			return mkDefault(f.Default), nil
-		}
-		return nil, nil
+		return defaultValue(f)
 	}
 	if fl.PByte >= 0 && (r.u8(v.loc+fl.PByte)>>fl.Bit)&1 == 0 {
-		return nil, nil
+		return nil
 	}
-	return r.slotGet(fl.F.Type, v.loc+fl.Off, v.loc), nil
+	return r.slotGet(fl.F.Type, v.loc+fl.Off, v.loc)
 }
 
 type ArrayView struct {
@@ -887,14 +916,17 @@ type ArrayView struct {
 func (a *ArrayView) Len() int { return a.n }
 func (a *ArrayView) At(i int) (val interface{}, err error) {
 	defer catch(&err)
+	return a.at(i), nil
+}
+func (a *ArrayView) at(i int) interface{} {
 	if i < 0 || i >= a.n {
 		fail("E_BIN_BOUNDS", "index out of range")
 	}
 	p := a.start + i*a.str
 	if a.elem.Kind == "struct" {
-		return a.r.structView(a.elem.Idx, p), nil
+		return a.r.structView(a.elem.Idx, p)
 	}
-	return a.r.slotGet(a.elem, p, a.blk), nil
+	return a.r.slotGet(a.elem, p, a.blk)
 }
 
 type UnionView struct {
@@ -913,12 +945,15 @@ func (u *UnionView) Name() string {
 }
 func (u *UnionView) Value() (val interface{}, err error) {
 	defer catch(&err)
+	return u.value(), nil
+}
+func (u *UnionView) value() interface{} {
 	for _, v := range u.r.sc.Types[u.idx].Variants {
 		if v.Tag == u.Tag {
-			return u.r.heapGet(v.T, u.r.fwd(u.r.u32(u.pos+1), u.ms, "union payload"), u.ms), nil
+			return u.r.heapGet(v.T, u.r.fwd(u.r.u32(u.pos+1), u.ms, "union payload"), u.ms)
 		}
 	}
-	return nil, nil
+	return nil
 }
 
 type AnyArray struct {

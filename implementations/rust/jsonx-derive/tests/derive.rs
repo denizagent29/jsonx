@@ -125,3 +125,15 @@ fn direct_encoder_enforces_constraints_like_the_text_encoder() {
     assert_eq!(long.to_blob().unwrap_err().code, "E_CONSTRAINT");
     assert_eq!(sample().to_blob_with(Some(9), false).unwrap_err().code, "E_SCHEMA_INVALID");
 }
+
+#[test]
+fn matches_the_python_golden_blob() {
+    // written by the Python reference implementation (tests/vectors/shop); Go's Marshal is checked against the same file
+    let golden = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../tests/vectors/shop/receipt.bjsonx")).unwrap();
+    assert_eq!(sample().to_blob().unwrap(), golden);
+    assert_eq!(Receipt::from_blob(&golden).unwrap(), sample());
+    let v1 = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../tests/vectors/shop/receipt_v1.bjsonx")).unwrap();
+    let old = Receipt::from_blob(&v1).unwrap();
+    assert_eq!((old.nick.as_str(), old.note.as_deref(), old.status.clone()), ("n", Some("n"), Status::Draft));
+    assert_eq!(old.to_blob_with(Some(1), false).unwrap(), v1);
+}
