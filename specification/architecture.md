@@ -21,12 +21,13 @@
 ## Implemented beyond the core (v0.1)
 * **Schema compiler in two languages**: Python (reference) and Rust (`jsonx::compile_str`, `jsonxc`); they agree byte-for-byte on `.jxsb` output and on schema error codes/positions (vectors `schema/ok`, `schema/errors`).
 * **Rust `#[derive(Bjsonx)]`** (`jsonx-derive`): reads the schema at build time, type-checks the struct against it, embeds the canonical schema, generates `to_blob/from_blob/open/view` and `<Name>View` zero-copy accessors.
-  This is the one *specialised* (schema-specific) decode path; everything else interprets the compiled schema at run time.
+  Encoding is direct (`rt::Writer` + `BjEncode`, schema layout resolved at run time, no intermediate document; differential-tested against the generic encoder); decoding into structs reads only the needed fields.
+  These are the only *specialised* paths; everything else interprets the compiled schema at run time.
 
 ## Known limitations (v0.1)
 * Schema *text* compilers exist in Python and Rust only; Go and JS load the compiled `.jxsb`. Go/JS have no derive-style typed mapping: `jsonxc gen go|ts` emits type definitions + the embedded schema, decoding yields views or a generic document.
 * The derive macro: no `any` fields; `ref<T>` fields decode (copy of the target) but cannot be encoded from a Rust value tree (`E_REF_TARGET`); Rust types must be named like the schema types; every derived type embeds its own copy of the schema bytes;
-  encoding goes through an intermediate `Doc` (measured: slower than decoding; a direct encoder is future work); unknown enum values from newer writers are an error in owned decode (views of raw documents keep the integer).
+  unknown enum values from newer writers are an error in owned decode (views of raw documents keep the integer).
 * Generated *specialised* codecs for Go/JS/Python, and the "generated vs interpreted" benchmark for them, do not exist.
 * No `map<K,V>` type, no f16, no NaN/Infinity in text, imports are flattened (no namespacing), `ref` inside `any` can only target `any` slots, refs to non-struct union payloads are rejected.
 * Python implementation is pure Python (slow for bulk work; see benchmarks); Go owned decode allocates heavily; Rust generic `encode` clones the document first.

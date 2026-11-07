@@ -15,7 +15,7 @@
 //! ```
 //! The macro compiles the schema at build time (the build re-runs when the `.jxs` or its imports change), checks that the Rust type matches it
 //! (field names, types, optionality; compile errors point at the offending field), embeds the canonical binary schema and generates:
-//! `to_blob`, `to_blob_with`, `from_blob`, `open`, `view`, `schema` and a `<Name>View<'b,'a>` type with one accessor per field.
+//! `to_blob` / `to_blob_with` (direct encoder: writes the struct straight into the buffer, enforces `@range`/`@len`), `to_doc`, `from_blob`, `open`, `view`, `schema` and a `<Name>View<'b,'a>` type with one accessor per field.
 //!
 //! Mapping: `bool`, `u8..u64`, `i8..i64`, `f32`, `f64`, `String` (string), `Vec<u8>` (bytes), `Vec<T>` (array), `Option<T>` (optional/nullable),
 //! other derived structs / unit-variant enums (schema enums) / tuple-variant enums (schema unions) by type name.
@@ -148,7 +148,7 @@ fn expand(input: DeriveInput) -> syn::Result<T2> {
     match (&sc.types[idx], &input.data) {
         (TypeDef::Struct { fields, .. }, Data::Struct(ds)) => expand_struct(&sc, idx, fields, ds, ident, &tname, dep_tokens),
         (TypeDef::Enum { values, .. }, Data::Enum(de)) => expand_enum(values, de, ident, dep_tokens),
-        (TypeDef::Union { variants, .. }, Data::Enum(de)) => expand_union(&sc, variants, de, ident, dep_tokens),
+        (TypeDef::Union { variants, .. }, Data::Enum(de)) => expand_union(&sc, idx, variants, de, ident, dep_tokens),
         (TypeDef::Struct { .. }, _) => Err(serr(ident.span(), format!("`{}` is a schema (struct) in the .jxs: derive on a struct with named fields", tname))),
         (TypeDef::Enum { .. }, _) => Err(serr(ident.span(), format!("`{}` is an enum in the .jxs: derive on an enum with unit variants", tname))),
         (TypeDef::Union { .. }, _) => Err(serr(ident.span(), format!("`{}` is a union in the .jxs: derive on an enum with one-field tuple variants", tname))),
@@ -161,7 +161,7 @@ fn expand_struct(sc: &Schema, idx: usize, fields: &[jsonx::Field], ds: &syn::Dat
     let mut rust: Vec<(&syn::Field, String)> = vec![];
     for f in named { let r = attrs(&f.attrs)?; let n = r.rename.map(|l| l.value()).unwrap_or_else(|| f.ident.as_ref().unwrap().to_string()); rust.push((f, n)); }
     for (f, n) in &rust { if !fields.iter().any(|sf| sf.name == *n) { return Err(serr(f.span(), format!("schema `{}` has no field `{}`", tname, n))); } }
-    let mut b_stmts = vec![]; let mut from_inits = vec![]; let mut view_fns = vec![]; let mut has_ref_field = false;
+    let mut b_stmts = vec![]; let mut put_arms = vec![]; let mut from_inits = vec![]; let mut view_fns = vec![]; let mut has_ref_field = false;
     for sf in fields {
         let (rf, _) = rust.iter().find(|(_, n)| *n == sf.name).ok_or_else(|| serr(ident.span(), format!("struct `{}` is missing the schema field `{}` (type {}{})", ident, sf.name, sc.type_name(&sf.ty), if sf.optional { ", optional" } else { "" })))?;
         let fid = rf.ident.as_ref().unwrap(); let wire = &sf.name; let since = sf.since;
@@ -171,7 +171,12 @@ fn expand_struct(sc: &Schema, idx: usize, fields: &[jsonx::Field], ds: &syn::Dat
         let inner_ty: &Type = if opt { match last_ident(&rf.ty) { Some((n, s)) if n == "Option" => generic_arg(s).ok_or_else(|| serr(rf.ty.span(), "Option needs a type argument"))?, _ => return Err(serr(rf.ty.span(), format!("field `{}` is {} in the schema: its Rust type must be `Option<..>`", wire, if sf.optional { "optional" } else { "nullable" }))) } } else {
             if matches!(last_ident(&rf.ty), Some((n, _)) if n == "Option") { return Err(serr(rf.ty.span(), format!("field `{}` is required in the schema; use a non-Option type (or mark it optional<> there)", wire))); } &rf.ty };
         check(sc, &sf.ty, inner_ty).map_err(|m| serr(rf.ty.span(), format!("field `{}`: {}", wire, m)))?;
-        // build
+        // direct encoding arm (layout order is decided at run time from the schema version)
+        let k = fields.iter().position(|x| x.name == sf.name).unwrap();
+        let cons_chk = quote!(if !__f.cons.is_empty() { __w.constrain(#tname, __f, ::jsonx::rt::BjEncode::con_num(__x), ::jsonx::rt::BjEncode::con_len(__x))?; });
+        put_arms.push(if opt { quote!(#k => { let __f = &__fields[#k]; if let Some(__x) = &self.#fid { __w.buf[__base + __fl.pbyte.unwrap()] |= 1 << __fl.bit; ::jsonx::rt::BjEncode::put(__x, __w, &__f.ty, __base + __fl.off)?; #cons_chk } }) }
+            else { quote!(#k => { let __f = &__fields[#k]; let __x = &self.#fid; ::jsonx::rt::BjEncode::put(__x, __w, &__f.ty, __base + __fl.off)?; #cons_chk }) });
+        // build (Doc path, used by to_doc)
         let to_in = to_expr(sc, &sf.ty, &quote!(__x));
         b_stmts.push(if sf.optional { quote!(if __ver >= #since { if let Some(__x) = &self.#fid { let __c = #to_in?; __b.set(__o, #wire, __c); } }) }
             else if sf.nullable { quote!(if __ver >= #since { match &self.#fid { Some(__x) => { let __c = #to_in?; __b.set(__o, #wire, __c); } None => { let __c = __b.null(); __b.set(__o, #wire, __c); } } }) }
@@ -202,15 +207,29 @@ fn expand_struct(sc: &Schema, idx: usize, fields: &[jsonx::Field], ds: &syn::Dat
             pub fn to_blob(&self) -> ::jsonx::Res<Vec<u8>> { self.to_blob_with(None, false) }
             /// Encode at an older layout `version` (for old readers) and/or with a CRC-32 trailer.
             pub fn to_blob_with(&self, version: Option<usize>, checksum: bool) -> ::jsonx::Res<Vec<u8>> {
-                let __ver = version.unwrap_or(Self::schema().version); let mut __b = ::jsonx::rt::DocBuilder::new(); let __root = self.__jx_build(&mut __b, __ver)?;
-                ::jsonx::encode(&__b.finish(__root), Some(Self::schema()), &::jsonx::EncodeOptions { root: Some(#tname.to_string()), version: Some(__ver), checksum })
+                let __sc = Self::schema(); let __ver = version.unwrap_or(__sc.version);
+                if __ver < 1 || __ver > __sc.version { return Err(::jsonx::Error { code: "E_SCHEMA_INVALID".into(), message: "cannot encode that version with this schema".into(), pos: None, line: None, col: None }); }
+                let mut __w = ::jsonx::rt::Writer::new(__sc, __ver); let __base = __w.alloc(__sc.layout(#idx, __ver).size)?;
+                ::jsonx::rt::BjEncode::put_block(self, &mut __w, __base)?; __w.finish(__base, __sc.id_for(#tname), checksum)
             }
+            /// Build a generic [`jsonx::Doc`] (e.g. to print it with `.dump()` or to add references before encoding).
+            pub fn to_doc(&self) -> ::jsonx::Res<::jsonx::Doc> { self.to_doc_with(None) }
+            /// Like `to_doc`, but only including fields present in layout `version` (default: the schema's current version).
+            pub fn to_doc_with(&self, version: Option<usize>) -> ::jsonx::Res<::jsonx::Doc> { let mut __b = ::jsonx::rt::DocBuilder::new(); let __root = self.__jx_build(&mut __b, version.unwrap_or(Self::schema().version))?; Ok(__b.finish(__root)) }
             /// Decode into an owned value (reads and converts every field; unknown newer fields are ignored, missing newer fields take their defaults).
             pub fn from_blob(bytes: &[u8]) -> ::jsonx::Res<Self> { let __blob = Self::open(bytes)?; let __v = __blob.root()?; Self::__jx_from_val(&__v) }
             /// Validate the header/schema and open the blob for zero-copy access.
             pub fn open<'a>(bytes: &'a [u8]) -> ::jsonx::Res<::jsonx::Blob<'a>> { ::jsonx::Blob::open(bytes, Some(Self::schema()), &::jsonx::ReadOptions::default()) }
             /// Typed zero-copy view of the root value of an opened blob.
             pub fn view<'b, 'a>(blob: &'b ::jsonx::Blob<'a>) -> ::jsonx::Res<#view<'b, 'a>> { match blob.root()? { ::jsonx::Val::Struct(s) => Self::__jx_view(s), o => Err(::jsonx::rt::mismatch(#tname, &o)) } }
+        }
+        impl ::jsonx::rt::BjEncode for #ident {
+            fn put_heap(&self, __w: &mut ::jsonx::rt::Writer, _t: &::jsonx::Ty) -> ::jsonx::Res<usize> { let __size = __w.sc.layout(#idx, __w.ver).size; let __base = __w.alloc(__size)?; ::jsonx::rt::BjEncode::put_block(self, __w, __base)?; Ok(__base) }
+            fn put_block(&self, __w: &mut ::jsonx::rt::Writer, __base: usize) -> ::jsonx::Res<()> {
+                let __sc = __w.sc; let __fields = __sc.fields(#idx); let __lay = __sc.layout(#idx, __w.ver);
+                for __fl in &__lay.lay { match __fl.fidx { #(#put_arms)* _ => {} } }
+                Ok(())
+            }
         }
         /// Zero-copy typed view; every accessor reads from the buffer on demand.
         #[derive(Debug, Clone)] pub struct #view<'b, 'a>(pub ::jsonx::StructView<'b, 'a>);
@@ -231,25 +250,39 @@ fn expand_enum(values: &[(String, u32)], de: &syn::DataEnum, ident: &syn::Ident,
         let vi = &v.ident; arms_b.push(quote!(Self::#vi => __b.string(#wire))); arms_f.push(quote!(#wire => Ok(Self::#vi))); seen.push(wire);
     }
     for (n, _) in values { if !seen.contains(n) { return Err(serr(ident.span(), format!("missing a variant for enum member `{}`", n))); } }
-    Ok(quote! { #deps impl #ident {
+    let names: Vec<_> = de.variants.iter().map(|v| { let r = attrs(&v.attrs).unwrap(); r.rename.map(|l| l.value()).unwrap_or_else(|| variant_wire(values.iter().map(|(n, _)| n.as_str()), &v.ident.to_string(), v.span()).unwrap()) }).collect();
+    let vids: Vec<_> = de.variants.iter().map(|v| &v.ident).collect();
+    Ok(quote! { #deps
+        impl ::jsonx::rt::BjEncode for #ident {
+            fn put_inline(&self, __w: &mut ::jsonx::rt::Writer, __t: &::jsonx::Ty, __pos: usize) -> ::jsonx::Res<()> { let __n = match self { #(Self::#vids => #names),* }; __w.write_enum(__t, __n, __pos) }
+            fn put_heap(&self, __w: &mut ::jsonx::rt::Writer, __t: &::jsonx::Ty) -> ::jsonx::Res<usize> { let __p = __w.alloc(__w.sc.slot_size(__t))?; self.put_inline(__w, __t, __p)?; Ok(__p) }
+        }
+        impl #ident {
         #[doc(hidden)] pub fn __jx_build(&self, __b: &mut ::jsonx::rt::DocBuilder, _ver: usize) -> ::jsonx::Res<::jsonx::Id> { Ok(match self { #(#arms_b),* }) }
         #[doc(hidden)] pub fn __jx_from_val(__v: &::jsonx::Val<'_, '_>) -> ::jsonx::Res<Self> { match __v { ::jsonx::Val::Enum(n) => match *n { #(#arms_f,)* o => Err(::jsonx::rt::unknown("enum member", o)) },
             ::jsonx::Val::EnumRaw(x) => Err(::jsonx::rt::unknown("enum value", &x.to_string())), o => Err(::jsonx::rt::mismatch("enum", o)) } }
     } })
 }
-fn expand_union(sc: &Schema, variants: &[(String, u8, Ty)], de: &syn::DataEnum, ident: &syn::Ident, deps: T2) -> syn::Result<T2> {
-    let mut arms_b = vec![]; let mut arms_f = vec![]; let mut seen = vec![];
+fn expand_union(sc: &Schema, uidx: usize, variants: &[(String, u8, Ty)], de: &syn::DataEnum, ident: &syn::Ident, deps: T2) -> syn::Result<T2> {
+    let mut arms_b = vec![]; let mut arms_f = vec![]; let mut arms_p = vec![]; let mut seen = vec![];
     for v in &de.variants {
         let ty = match &v.fields { Fields::Unnamed(u) if u.unnamed.len() == 1 => &u.unnamed[0].ty, _ => return Err(serr(v.span(), "schema unions map to enums whose variants have exactly one unnamed field")) };
         let r = attrs(&v.attrs)?; let rn = v.ident.to_string(); let wire = match r.rename { Some(l) => l.value(), None => variant_wire(variants.iter().map(|(n, _, _)| n.as_str()), &rn, v.span())? };
         let (_, _, vt) = variants.iter().find(|(n, _, _)| *n == wire).ok_or_else(|| serr(v.span(), format!("union has no variant `{}`", wire)))?;
         check(sc, vt, ty).map_err(|m| serr(ty.span(), format!("variant `{}`: {}", wire, m)))?;
         let vi = &v.ident; let to = to_expr(sc, vt, &quote!(__x)); let from = from_expr(sc, vt, &quote!(&__pv));
+        let vk = variants.iter().position(|(n, _, _)| *n == wire).unwrap();
+        arms_p.push(quote!(Self::#vi(__x) => { let __sc = __w.sc; let (__tag, __vt) = match &__sc.types[#uidx] { ::jsonx::TypeDef::Union { variants, .. } => (variants[#vk].1, variants[#vk].2.clone()), _ => unreachable!() };
+            let __off = ::jsonx::rt::BjEncode::put_heap(__x, __w, &__vt)?; __w.buf[__pos] = __tag; __w.set_u32(__pos + 1, __off); Ok(()) }));
         arms_b.push(quote!(Self::#vi(__x) => { let __c = #to?; let __o = __b.object(); __b.set(__o, #wire, __c); Ok(__o) }));
         arms_f.push(quote!(Some(#wire) => { let __pv = __u.value()?; Ok(Self::#vi(#from?)) })); seen.push(wire);
     }
     for (n, _, _) in variants { if !seen.contains(n) { return Err(serr(ident.span(), format!("missing a variant for union variant `{}`", n))); } }
-    Ok(quote! { #deps impl #ident {
+    Ok(quote! { #deps
+        impl ::jsonx::rt::BjEncode for #ident {
+            fn put_inline(&self, __w: &mut ::jsonx::rt::Writer, _t: &::jsonx::Ty, __pos: usize) -> ::jsonx::Res<()> { match self { #(#arms_p),* } }
+        }
+        impl #ident {
         #[doc(hidden)] pub fn __jx_build(&self, __b: &mut ::jsonx::rt::DocBuilder, __ver: usize) -> ::jsonx::Res<::jsonx::Id> { let _ = __ver; match self { #(#arms_b),* } }
         #[doc(hidden)] pub fn __jx_from_val(__v: &::jsonx::Val<'_, '_>) -> ::jsonx::Res<Self> { match __v { ::jsonx::Val::Union(__u) => match __u.name() { #(#arms_f,)* o => Err(::jsonx::rt::unknown("union variant", o.unwrap_or("?"))) }, o => Err(::jsonx::rt::mismatch("union", o)) } }
     } })

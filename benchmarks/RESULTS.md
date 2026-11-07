@@ -20,9 +20,9 @@ compare *implementations* as much as *formats*.
 * **Where JSONX wins.** Random access and shared references. Reading one field through a zero-copy view costs ~0.01 ms in Python (vs 8-12 ms for every format that
   decodes the whole document first, 22 ms for Avro), ~1 us in Go, and is below the 0.01 ms resolution of the Node/Rust tables. Shared objects are stored once: with 20,000
   references to 200 users the typed blob is 173 KB vs 637 KB for JSON with integer foreign keys (3.7x), 441 KB for MessagePack with integer keys (2.5x), and 2.3 MB for denormalised JSON.
-* **Typed vs generic decoding (Rust, measured):** `#[derive(Bjsonx)]` `from_blob` into a struct takes 3.7 ms vs 15.7 ms for the generic validated `jsonx::decode` (4.2x faster), because it
-  reads only what the struct needs and skips alias bookkeeping. `to_blob` (18 ms) is *slower* than decode: the derive currently builds an intermediate `Doc` then encodes it; a direct
-  struct-to-bytes encoder is the obvious next optimisation and is **not implemented**.
+* **Typed (derive) vs generic API (Rust, measured; same-run ratios over 3 repeat runs, this machine was ~2x slower than during the other tables):** `#[derive(Bjsonx)]` `to_blob` writes the struct
+  straight into the buffer in 1.0-1.6 ms vs 34-52 ms for the generic path (`to_doc` + `jsonx::encode`), i.e. **~25-35x faster**, with byte-identical output (checked on 500 random values x 2 schema versions).
+  `from_blob` into a struct takes 5-7 ms vs 30-38 ms for the generic validated `jsonx::decode` (**~5-6x faster**), because it reads only what the struct needs and skips alias bookkeeping.
 * **Why owned decode is slow elsewhere:** it builds a validated node graph with alias tracking (location memo, per-node budget checks). Views are the fast path. In Go the remaining cost is per-node
   allocation (a `big.Int` and a wide `Node` per value); replacing string memo keys with integer keys and cached type keys gave only ~10 %.
 * **Not measured:** generated *specialised* codecs vs the interpreted codec (the derive's typed decode above is the only specialised path), relative-vs-absolute offsets, FlatBuffers, Cap'n Proto.
@@ -119,9 +119,11 @@ BenchmarkJSONUnmarshalThenIndex 	      42	  27328413 ns/op
 | BJSONX typed view: users[5000].name (zero-copy) | 0.00 |  |
 
 ## Rust (derive)
+
 | operation (Rust --release; 10,000 items + 1,000 customers; blob 558705 bytes) | ms |
 |---|---:|
-| derive: to_blob (struct -> Doc -> bytes) | 17.987 |
-| derive: from_blob (bytes -> owned struct) | 3.739 |
-| generic: jsonx::decode (bytes -> validated Doc) | 15.701 |
-| derive view: items[5000].sku (zero-copy) | 0.000 |
+| derive: to_blob (direct struct -> bytes) | 1.468 |
+| derive: from_blob (bytes -> owned struct) | 7.651 |
+| generic: to_doc + jsonx::encode (the old path through a Doc) | 49.556 |
+| generic: jsonx::decode (bytes -> validated Doc) | 38.237 |
+| derive view: items[5000].sku (zero-copy) | 0.001 |

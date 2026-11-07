@@ -1,5 +1,6 @@
 *.egg-info/
 *.pyc
+.venv/
 __pycache__/
 benchmarks/data/
 benchmarks/results/

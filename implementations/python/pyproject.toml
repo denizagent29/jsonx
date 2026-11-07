@@ -1,13 +1,26 @@
 [build-system]
-requires = ["setuptools>=61"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
 [project]
 name = "jsonx"
 version = "0.1.0"
-description = "JSONX text and BJSONX binary format"
+description = "JSONX text and BJSONX binary format: parser, resolver, schema compiler, zero-copy views"
+readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
+dependencies = []                       # the library is standard-library only
+
 [project.scripts]
 jsonxc = "jsonx.cli:main"
-[tool.setuptools]
+
+[dependency-groups]
+# `uv sync --group bench` / `uv run --group bench ...`: comparison libraries for benchmarks/bench.py
+bench = ["msgpack>=1.0", "cbor2>=5.6", "pymongo>=4.6", "fastavro>=1.9", "grpcio-tools>=1.60"]
+dev = []
+
+[tool.hatch.build.targets.wheel]
 packages = ["jsonx"]
+
+[tool.uv]
+default-groups = ["dev"]

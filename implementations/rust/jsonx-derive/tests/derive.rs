@@ -91,3 +91,37 @@ fn malformed_input_is_an_error_not_a_panic() {
     for n in 0..blob.len() { let _ = Receipt::from_blob(&blob[..n]); }
     assert_eq!(Receipt::from_blob(b"nope").unwrap_err().code, "E_BIN_TRUNCATED");
 }
+
+struct Lcg(u64);
+impl Lcg { fn n(&mut self, m: u64) -> u64 { self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407); (self.0 >> 33) % m } fn s(&mut self) -> String { let l = self.n(6); (0..l).map(|_| ['a', 'é', 'Z', '日', '0', '"'][self.n(6) as usize]).collect() } }
+fn random_receipt(r: &mut Lcg) -> Receipt {
+    let customers = (0..r.n(4)).map(|_| Customer { id: r.n(1 << 40), name: format!("n{}", r.s()), vip: r.n(2) == 0, email: if r.n(2) == 0 { Some(r.s()) } else { None } }).collect();
+    let items = (0..r.n(5)).map(|_| Item { sku: r.s(), qty: r.n(100) as u32, price: r.n(100000) as f64 / 7.0, tags: (0..r.n(3)).map(|_| r.s()).collect(), weight: if r.n(2) == 0 { Some(r.n(1000) as f32 / 3.0) } else { None } }).collect();
+    let payment = match r.n(4) { 0 => None, 1 => Some(Payment::Cash(r.n(1 << 31) as u32)), 2 => Some(Payment::Iban(r.s())), _ => Some(Payment::Card(Card { last4: "1234".into(), brand: r.s() })) };
+    Receipt { id: r.n(u64::MAX), customers, items, status: [Status::Draft, Status::Paid, Status::Shipped][r.n(3) as usize].clone(), payment, note: if r.n(2) == 0 { Some(r.s()) } else { None },
+        raw: (0..r.n(8)).map(|_| r.n(256) as u8).collect(), grid: (0..r.n(3)).map(|_| (0..r.n(4)).map(|_| r.n(65536) as i64 as i16).collect()).collect(), nick: r.s() }
+}
+#[test]
+fn direct_encoder_equals_doc_encoder_on_random_values() {
+    let mut r = Lcg(2024);
+    for i in 0..500 {
+        let v = random_receipt(&mut r);
+        for ver in [1usize, 2] {
+            let direct = v.to_blob_with(Some(ver), i % 2 == 0).unwrap();
+            let doc = v.to_doc_with(Some(ver)).unwrap();
+            let via_doc = jsonx::encode(&doc, Some(Receipt::schema()), &jsonx::EncodeOptions { root: Some("Receipt".into()), version: Some(ver), checksum: i % 2 == 0 }).unwrap();
+            assert_eq!(direct, via_doc, "case {} version {}", i, ver);
+        }
+        assert_eq!(Receipt::from_blob(&v.to_blob().unwrap()).unwrap(), v);
+    }
+}
+#[test]
+fn direct_encoder_enforces_constraints_like_the_text_encoder() {
+    let bad_name = Receipt { customers: vec![Customer { id: 1, name: "".into(), vip: false, email: None }], ..sample() };                     // @len(1, 64)
+    assert_eq!(bad_name.to_blob().unwrap_err().code, "E_CONSTRAINT");
+    let bad_card = Receipt { payment: Some(Payment::Card(Card { last4: "123".into(), brand: "x".into() })), ..sample() };                       // @len(4, 4) inside a union payload
+    assert_eq!(bad_card.to_blob().unwrap_err().code, "E_CONSTRAINT");
+    let long = Receipt { customers: vec![Customer { id: 1, name: "x".repeat(65), vip: false, email: None }], ..sample() };
+    assert_eq!(long.to_blob().unwrap_err().code, "E_CONSTRAINT");
+    assert_eq!(sample().to_blob_with(Some(9), false).unwrap_err().code, "E_SCHEMA_INVALID");
+}

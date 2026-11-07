@@ -28,13 +28,13 @@ MIME types: `application/jsonx`, `application/bjsonx` (see `specification/http.m
 | shared vectors + malformed-input corpus + mutation fuzz | ✅ | ✅ | ✅ | ✅ |
 Cross-language: `tests/interop.sh` (all four produce identical bytes and read each other's blobs). Run everything: `tests/run_all.sh`.
 The Rust `jsonxc` is byte-for-byte equivalent to the Python one (`tests/cli_parity.sh`: 124 comparisons of compiled schemas, blobs, dumps, generated code, error codes).
-Read **Known limitations** in `specification/architecture.md` before adopting; pure-Python speed is poor and typed encoding in the derive builds an intermediate document
-(see `benchmarks/RESULTS.md`, which also lists where JSONX loses and where it wins).
+Read **Known limitations** in `specification/architecture.md` before adopting; pure-Python speed is poor (see `benchmarks/RESULTS.md`, which also lists where JSONX loses and where it wins).
+The Rust derive encodes straight into the buffer (no intermediate document), byte-identical to the generic encoder.
 
 ## Quick start
 ```bash
-# 1. compile a schema, encode, inspect, decode (Python >= 3.9, no dependencies)
-J=compiler/jsonxc/jsonxc
+# 1. compile a schema, encode, inspect, decode  (Python >= 3.9 via uv; the library itself has no dependencies)
+J="uv run --project implementations/python jsonxc"         # or: uvx --from implementations/python jsonxc ... ; or just compiler/jsonxc/jsonxc with any python3
 $J compile examples/schemas/lesson.jxs -o lesson.jxsb
 $J encode examples/text/lesson.jsonx -s examples/schemas/lesson.jxs --crc -o lesson.bjsonx
 $J inspect lesson.bjsonx -s lesson.jxsb --hex
@@ -45,7 +45,7 @@ $J gen examples/schemas/lesson.jxs --lang ts|go|rust|python   # types + embedded
 ```
 Exit codes: 0 ok · 1 usage/IO · 2 invalid text/schema/data · 3 malformed binary.
 
-**Python** (`pip install -e implementations/python` or add it to `PYTHONPATH`)
+**Python** (`uv sync --project implementations/python`; in your own project: `uv add ./implementations/python`)
 ```python
 import jsonx
 doc = jsonx.parse(open("examples/text/lesson.jsonx").read())      # raises JsonxError(code, line, col, ...)
@@ -120,7 +120,7 @@ every other implementation must reproduce them exactly. Changing semantics means
 
 ## Reproducibility
 No network access is needed at build/test time (Rust crate and Go module have no dependencies; JS has none). Vector generation is deterministic
-(`tests/run_all.sh` verifies this). Benchmarks need `pip install msgpack cbor2 pymongo fastavro grpcio-tools` for the comparators.
+(`tests/run_all.sh` verifies this). Python tooling is [uv](https://docs.astral.sh/uv/): `implementations/python/uv.lock` pins the dev/bench environment (`uv sync --locked --group bench`); benchmarks run via `uv run --group bench`.
 
 ## License
 MIT (see LICENSE).

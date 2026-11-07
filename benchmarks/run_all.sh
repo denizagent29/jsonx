@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
+# Uses `uv run --group bench` (locked comparison libraries) when uv is available.
 # Runs every benchmark and writes benchmarks/results/*.md plus a combined RESULTS.md. Needs the comparison libraries
 # for Python (pip install msgpack cbor2 pymongo fastavro grpcio-tools). Env: BENCH_N (records, default 10000), BENCH_REPS.
 set -euo pipefail
 R="$(cd "$(dirname "$0")/.." && pwd)"; cd "$R"; O=benchmarks/results; mkdir -p "$O"
-python3 benchmarks/gen_data.py
-python3 compiler/jsonxc/jsonxc compile benchmarks/users.jxs -o benchmarks/data/users.jxsb 2>/dev/null
-python3 benchmarks/bench.py > "$O/python.md"
+if command -v uv >/dev/null; then PY=(uv run --quiet --locked --group bench --project implementations/python python); else PY=(python3); fi
+"${PY[@]}" benchmarks/gen_data.py
+"${PY[@]}" compiler/jsonxc/jsonxc compile benchmarks/users.jxs -o benchmarks/data/users.jxsb 2>/dev/null
+"${PY[@]}" benchmarks/bench.py > "$O/python.md"
 node benchmarks/bench.mjs > "$O/node.md"
 ( cd implementations/go && go test -run xxx -bench . -benchtime 1s ./jsonx | grep -E "^(Benchmark|cpu|goos|goarch)" ) > "$O/go.txt"
 ( cd implementations/rust && cargo run -q --release -p jsonx --example bench | grep "^|" ) > "$O/rust.md"

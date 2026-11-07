@@ -2,10 +2,12 @@
 # Runs every test suite. Requires python3 (>=3.9), node (>=18), go (>=1.22), cargo (>=1.75); tsc optional.
 set -euo pipefail
 R="$(cd "$(dirname "$0")/.." && pwd)"; cd "$R"
-echo "== vector determinism"; before=$(find tests/vectors -type f | sort | xargs sha256sum | sha256sum); python3 tests/generate_vectors.py >/dev/null
+# Python via uv when available (pinned interpreter + lock file), plain python3 otherwise (the library is stdlib-only).
+if command -v uv >/dev/null; then PY=(uv run --quiet --locked --project implementations/python python); else PY=(python3); fi
+echo "== vector determinism"; before=$(find tests/vectors -type f | sort | xargs sha256sum | sha256sum); "${PY[@]}" tests/generate_vectors.py >/dev/null
 after=$(find tests/vectors -type f | sort | xargs sha256sum | sha256sum); [ "$before" = "$after" ] && echo "vectors reproducible" || { echo "VECTORS CHANGED"; exit 1; }
-echo "== python"; python3 tests/test_python.py
-echo "== http";   python3 tests/test_http.py
+echo "== python"; "${PY[@]}" tests/test_python.py
+echo "== http";   "${PY[@]}" tests/test_http.py
 echo "== js";     node tests/test_js.mjs
 echo "== go";     (cd implementations/go && go test -count=1 ./... )
 echo "== rust (workspace: jsonx, jsonx-derive, jsonxc)"; (cd implementations/rust && cargo test --release --workspace 2>&1 | grep -E "^test result|FAILED|error" )

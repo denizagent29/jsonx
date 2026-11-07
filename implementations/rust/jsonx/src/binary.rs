@@ -186,6 +186,14 @@ impl<'a> Enc<'a> {
     }
 }
 
+/// Write the 28-byte header (and the CRC-32 trailer if `checksum`; the trailer's 4 bytes must already be allocated) into a finished buffer.
+pub fn finish_header(b: &mut Vec<u8>, sid: u64, ver: usize, root_off: usize, checksum: bool) {
+    let n = b.len();
+    b[0..3].copy_from_slice(b"BJX"); b[3] = 1; b[4..6].copy_from_slice(&(checksum as u16).to_le_bytes()); b[6..8].copy_from_slice(&[0, 0]);
+    b[8..16].copy_from_slice(&sid.to_le_bytes()); b[16..20].copy_from_slice(&(ver as u32).to_le_bytes()); b[20..24].copy_from_slice(&(root_off as u32).to_le_bytes()); b[24..28].copy_from_slice(&(n as u32).to_le_bytes());
+    if checksum { let c = crc32(&b[..n - 4]); b[n - 4..].copy_from_slice(&c.to_le_bytes()); }
+}
+
 #[derive(Default, Clone)]
 pub struct EncodeOptions { pub root: Option<String>, pub version: Option<usize>, pub checksum: bool }
 
@@ -218,10 +226,7 @@ pub fn encode(doc: &Doc, schema: Option<&Schema>, o: &EncodeOptions) -> Res<Vec<
         e.u32(pos, loc);
     }
     if o.checksum { e.alloc(4)?; }
-    let mut b = e.buf; let n = b.len();
-    b[0..3].copy_from_slice(b"BJX"); b[3] = 1; b[4..6].copy_from_slice(&(o.checksum as u16).to_le_bytes()); b[6..8].copy_from_slice(&[0, 0]);
-    b[8..16].copy_from_slice(&sid.to_le_bytes()); b[16..20].copy_from_slice(&(ver as u32).to_le_bytes()); b[20..24].copy_from_slice(&(root_off as u32).to_le_bytes()); b[24..28].copy_from_slice(&(n as u32).to_le_bytes());
-    if o.checksum { let c = crc32(&b[..n - 4]); b[n - 4..].copy_from_slice(&c.to_le_bytes()); }
+    let mut b = e.buf; finish_header(&mut b, sid, ver, root_off, o.checksum);
     Ok(b)
 }
 
