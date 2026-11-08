@@ -193,7 +193,7 @@ version-compatibility blobs), plus mutation fuzzing, property tests, an HTTP ser
 
 ## Project status
 
-**v0.1.0 — usable, young.** The formats and semantics are specified and cross-tested, but nothing is published to crates.io / PyPI / npm yet and the GitHub workflows have just started running.
+**v0.1.0 — usable, young.** The formats and semantics are specified and cross-tested, but nothing is published to crates.io / PyPI / npm yet. CI (35 jobs: Python 3.9–3.13, Node 18/20/22, Go and Rust on Linux/Windows/macOS, cross-language interop) is green.
 Known gaps (all documented): no `map<K,V>`, no f16, no NaN/Infinity in text; `ref` fields are read-only in typed Go/Rust mappings; no JS typed mapping; pure-Python is slow;
 FlatBuffers and Cap'n Proto were not benchmarked; blobs are limited to 4 GiB. The Rust derive and the Go mapping are interpreted against the compiled schema at run time, not code-generated.
 
