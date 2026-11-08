@@ -1,6 +1,24 @@
+# One grouped PR per ecosystem per month, never majors automatically (majors are reviewed by hand: e.g. syn 2 -> 3 is a macro rewrite).
 version: 2
 updates:
-  - { package-ecosystem: github-actions, directory: "/", schedule: { interval: monthly } }
-  - { package-ecosystem: cargo, directory: "/implementations/rust", schedule: { interval: monthly } }
-  - { package-ecosystem: gomod, directory: "/implementations/go", schedule: { interval: monthly } }
-  - { package-ecosystem: pip, directory: "/implementations/python", schedule: { interval: monthly } }
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule: { interval: monthly }
+    open-pull-requests-limit: 1
+    groups: { actions: { patterns: ["*"] } }
+  - package-ecosystem: cargo
+    directory: "/implementations/rust"
+    schedule: { interval: monthly }
+    open-pull-requests-limit: 1
+    groups: { cargo: { patterns: ["*"] } }
+    ignore: [{ dependency-name: "*", update-types: ["version-update:semver-major"] }]
+  - package-ecosystem: gomod
+    directory: "/implementations/go"
+    schedule: { interval: monthly }
+    open-pull-requests-limit: 1
+  - package-ecosystem: uv
+    directory: "/implementations/python"
+    schedule: { interval: monthly }
+    open-pull-requests-limit: 1
+    groups: { python: { patterns: ["*"] } }
+    ignore: [{ dependency-name: "*", update-types: ["version-update:semver-major"] }]
