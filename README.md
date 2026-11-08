@@ -176,7 +176,7 @@ Full language: [`specification/schema-language.md`](specification/schema-languag
 | typed mapping to your own types | – | `.d.mts`, `gen ts` | ✅ `Marshal/Unmarshal` | ✅ `#[derive(Bjsonx)]` |
 | CLI (`jsonxc`) | ✅ | – | – | ✅ |
 
-Everything is checked against shared vectors: ~460 files in [`tests/vectors/`](tests/vectors) (valid text, 40+ error cases with exact line/column, 30 malformed binaries, schema compiler cases,
+Everything is checked against shared vectors: ~390 files in [`tests/vectors/`](tests/vectors) (25 valid documents, 51 text and 17 encoding error cases with exact line/column, 26 malformed binaries, 34 schema-compiler cases,
 version-compatibility blobs), plus mutation fuzzing, property tests, an HTTP service test and cross-language interop (`tests/interop.sh`). Run it all: `tests/run_all.sh`.
 
 ## Documentation
