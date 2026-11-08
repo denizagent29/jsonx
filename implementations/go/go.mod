@@ -1,3 +1,3 @@
-module github.com/jsonx/jsonx/implementations/go
+module github.com/denizagent29/jsonx/implementations/go
 
 go 1.22

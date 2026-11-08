@@ -3,6 +3,8 @@ name = "jsonx-derive"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 description = "#[derive(Bjsonx)]: typed, schema-checked BJSONX codecs and zero-copy views for Rust structs"
 
 [lib]

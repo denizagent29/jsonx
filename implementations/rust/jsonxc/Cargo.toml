@@ -3,5 +3,9 @@ name = "jsonxc"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "jsonxc: JSONX/BJSONX schema compiler, converter, validator and inspector"
+
 [dependencies]
 jsonx = { path = "../jsonx" }

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/jsonx/jsonx/implementations/go/jsonx"
+	"github.com/denizagent29/jsonx/implementations/go/jsonx"
 )
 
 func must(e error) {

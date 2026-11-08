@@ -8,6 +8,8 @@
   "exports": { ".": { "types": "./src/jsonx.d.mts", "default": "./src/jsonx.mjs" } },
   "files": ["src"],
   "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/denizagent29/jsonx.git", "directory": "implementations/js" },
+  "homepage": "https://github.com/denizagent29/jsonx",
   "engines": { "node": ">=18" },
   "scripts": { "test": "node ../../tests/test_js.mjs" }
 }
