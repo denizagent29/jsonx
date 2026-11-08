@@ -51,7 +51,7 @@ jobs:
       matrix: { node: ["18", "20", "22"] }
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with: { node-version: "${{ matrix.node }}" }
       - run: node tests/test_js.mjs
       - name: TypeScript definitions type-check
@@ -103,7 +103,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with: { node-version: "22" }
       - uses: actions/setup-go@v5
         with: { go-version: "stable", cache-dependency-path: implementations/go/go.mod }
